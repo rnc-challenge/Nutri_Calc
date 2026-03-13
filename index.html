@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>リハ栄養計算比較ツール</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        input[type="range"] { cursor: pointer; }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // アイコンコンポーネントの簡易実装（Lucideを直接使用）
+        const Icon = ({ name, className }) => {
+            useEffect(() => {
+                lucide.createIcons();
+            }, []);
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('compare');
+            const [age, setAge] = useState(75);
+            const [gender, setGender] = useState('male');
+            const [height, setHeight] = useState(160);
+            const [weight, setWeight] = useState(50);
+            const [af, setAf] = useState(1.2);
+            const [ifc, setIfc] = useState(1.0);
+            const [proteinFactor, setProteinFactor] = useState(1.2);
+            const [simpleFactor, setSimpleFactor] = useState(25);
+            const [results, setResults] = useState({ hbe: 0, ni_hn: 0, simple: 0, bmi: 0, protein: 0 });
+            const [copied, setCopied] = useState(false);
+
+            const getAfLabel = (val) => {
+                if (val <= 1.1) return "寝たきり";
+                if (val <= 1.2) return "離床・座位";
+                if (val <= 1.4) return "軽歩行・リハ";
+                if (val <= 1.6) return "活発なリハ";
+                return "高強度リハ";
+            };
+
+            const getIfLabel = (val) => {
+                if (val <= 1.0) return "健常・良好";
+                if (val <= 1.1) return "小手術";
+                if (val <= 1.2) return "骨折・中手術";
+                if (val <= 1.4) return "重症感染症";
+                return "高度侵襲";
+            };
+
+            useEffect(() => {
+                const bmiVal = weight / ((height / 100) ** 2);
+                let bee_hbe = gender === 'male' 
+                    ? 66.47 + (13.75 * weight) + (5.0 * height) - (6.75 * age)
+                    : 655.1 + (9.56 * weight) + (1.85 * height) - (4.68 * age);
+                
+                let ree_nihn = gender === 'male'
+                    ? (0.0481 * weight + 0.0234 * height - 0.0138 * age - 0.4235) * 1000 / 4.186
+                    : (0.0481 * weight + 0.0234 * height - 0.0138 * age - 0.9708) * 1000 / 4.186;
+
+                setResults({
+                    hbe: Math.round(bee_hbe * af * ifc),
+                    ni_hn: Math.round(ree_nihn * af * ifc),
+                    simple: Math.round(weight * simpleFactor),
+                    bmi: bmiVal.toFixed(1),
+                    protein: (weight * proteinFactor).toFixed(1)
+                });
+                // アイコンを再描画
+                if (window.lucide) window.lucide.createIcons();
+            }, [age, gender, height, weight, af, ifc, simpleFactor, proteinFactor]);
+
+            const copyResults = () => {
+                const text = `【リハ栄養評価】\n■基本: ${age}歳 ${gender === 'male' ? '男性' : '女性'} (BMI: ${results.bmi})\n■TEE比較:\n ・HBE式: ${results.hbe} kcal/日\n ・NIHN式: ${results.ni_hn} kcal/日\n ・簡易式: ${results.simple} kcal/日\n■目標タンパク量: ${results.protein} g/日`;
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            const QuickBtn = ({ val, current, setter, label }) => (
+                <button 
+                    onClick={() => setter(val)}
+                    className={`px-2 py-1 text-[10px] rounded border transition-all ${current === val ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'}`}
+                >
+                    {label || val}
+                </button>
+            );
+
+            return (
+                <div className="min-h-screen p-4 md:p-6">
+                    <div className="max-w-4xl mx-auto space-y-4">
+                        <header className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h1 className="text-xl font-bold flex items-center gap-2 text-indigo-700">
+                                    <Icon name="calculator" className="w-6 h-6" />
+                                    リハ栄養計算比較ツール
+                                </h1>
+                                <p className="text-slate-500 text-xs mt-1">目安ガイド付き・単一ファイル版</p>
+                            </div>
+                            <button onClick={copyResults} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${copied ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                                <Icon name={copied ? "check" : "copy"} className="w-4 h-4" />
+                                {copied ? 'コピー完了' : '結果コピー'}
+                            </button>
+                        </header>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            <div className="lg:col-span-5 space-y-6">
+                                <section className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+                                    <div className="flex items-center gap-2 font-bold text-slate-700 pb-2 border-b border-slate-100">
+                                        <Icon name="user" className="w-4 h-4 text-indigo-500" />
+                                        身体情報
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="col-span-2 flex p-1 bg-slate-100 rounded-lg">
+                                            <button onClick={() => setGender('male')} className={`flex-1 py-1.5 rounded-md text-xs font-bold ${gender === 'male' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>男性</button>
+                                            <button onClick={() => setGender('female')} className={`flex-1 py-1.5 rounded-md text-xs font-bold ${gender === 'female' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500'}`}>女性</button>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-400">年齢 (歳)</label>
+                                            <input type="number" value={age} onChange={e => setAge(Number(e.target.value))} className="w-full bg-slate-50 p-2 rounded-lg border border-slate-200 outline-none text-sm font-bold focus:border-indigo-300" />
+                                        </div>
+                                        <div className="space-y-1 text-center">
+                                            <label className="text-[10px] font-bold text-slate-400">BMI</label>
+                                            <div className={`p-2 rounded-lg border font-black text-sm ${results.bmi < 18.5 ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>
+                                                {results.bmi}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-400">身長 (cm)</label>
+                                            <input type="number" value={height} onChange={e => setHeight(Number(e.target.value))} className="w-full bg-slate-50 p-2 rounded-lg border border-slate-200 outline-none text-sm font-bold focus:border-indigo-300" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-400">体重 (kg)</label>
+                                            <input type="number" value={weight} onChange={e => setWeight(Number(e.target.value))} className="w-full bg-slate-50 p-2 rounded-lg border border-slate-200 outline-none text-sm font-bold focus:border-indigo-300" />
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-6">
+                                    <div className="flex items-center gap-2 font-bold text-slate-700 pb-2 border-b border-slate-100">
+                                        <Icon name="activity" className="w-4 h-4 text-emerald-500" />
+                                        係数設定と目安
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-slate-600">活動係数 (AF)</span>
+                                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">{getAfLabel(af)}</span>
+                                            </div>
+                                            <span className="text-sm font-black text-emerald-600">{af.toFixed(2)}</span>
+                                        </div>
+                                        <input type="range" min="1.0" max="2.0" step="0.05" value={af} onChange={e => setAf(Number(e.target.value))} className="w-full accent-emerald-500" />
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            <QuickBtn val={1.1} current={af} setter={setAf} label="寝たきり" />
+                                            <QuickBtn val={1.2} current={af} setter={setAf} label="座位" />
+                                            <QuickBtn val={1.3} current={af} setter={setAf} label="軽歩行" />
+                                            <QuickBtn val={1.5} current={af} setter={setAf} label="リハ積極" />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-slate-600">傷害係数 (IF)</span>
+                                                <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full">{getIfLabel(ifc)}</span>
+                                            </div>
+                                            <span className="text-sm font-black text-orange-500">{ifc.toFixed(2)}</span>
+                                        </div>
+                                        <input type="range" min="1.0" max="2.0" step="0.05" value={ifc} onChange={e => setIfc(Number(e.target.value))} className="w-full accent-orange-500" />
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            <QuickBtn val={1.0} current={ifc} setter={setIfc} label="平常" />
+                                            <QuickBtn val={1.1} current={ifc} setter={setIfc} label="小手術" />
+                                            <QuickBtn val={1.2} current={ifc} setter={setIfc} label="骨折" />
+                                            <QuickBtn val={1.5} current={ifc} setter={setIfc} label="重症感染" />
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-slate-100 space-y-4">
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-bold text-slate-600">簡易式 (kcal/kg)</span>
+                                                <span className="text-sm font-black text-indigo-500">{simpleFactor}</span>
+                                            </div>
+                                            <input type="range" min="20" max="45" step="1" value={simpleFactor} onChange={e => setSimpleFactor(Number(e.target.value))} className="w-full accent-indigo-500" />
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                <QuickBtn val={20} current={simpleFactor} setter={setSimpleFactor} label="減量" />
+                                                <QuickBtn val={25} current={simpleFactor} setter={setSimpleFactor} label="維持" />
+                                                <QuickBtn val={30} current={simpleFactor} setter={setSimpleFactor} label="標準" />
+                                                <QuickBtn val={35} current={simpleFactor} setter={setSimpleFactor} label="体重増" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-bold text-slate-600">目標タンパク量 (g/kg)</span>
+                                                <span className="text-sm font-black text-blue-500">{proteinFactor}</span>
+                                            </div>
+                                            <input type="range" min="0.8" max="2.5" step="0.1" value={proteinFactor} onChange={e => setProteinFactor(Number(e.target.value))} className="w-full accent-blue-500" />
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                <QuickBtn val={0.8} current={proteinFactor} setter={setProteinFactor} label="腎制限" />
+                                                <QuickBtn val={1.0} current={proteinFactor} setter={setProteinFactor} label="標準" />
+                                                <QuickBtn val={1.2} current={proteinFactor} setter={setProteinFactor} label="高齢維持" />
+                                                <QuickBtn val={1.5} current={proteinFactor} setter={setProteinFactor} label="リハ強化" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+
+                            <div className="lg:col-span-7 space-y-4">
+                                <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl">
+                                    <div className="flex items-center gap-2 mb-6 opacity-80">
+                                        <Icon name="layers" className="w-5 h-5" />
+                                        <h2 className="text-sm font-bold uppercase tracking-wider">エネルギー必要量(TEE) 比較</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <ResultCard id="hbe" title="Harris-Benedict 式" val={results.hbe} active={activeTab === 'hbe'} onClick={() => setActiveTab('hbe')} color="indigo" desc="欧米基準。比較的高い値が出やすい。" />
+                                        <ResultCard id="ni_hn" title="国立健康・栄養研究所 式" val={results.ni_hn} active={activeTab === 'ni_hn'} onClick={() => setActiveTab('ni_hn')} color="emerald" desc="日本人の体格に適合。REEベース。" />
+                                        <ResultCard id="simple" title={`簡易推算式 (体重×${simpleFactor})`} val={results.simple} active={activeTab === 'simple'} onClick={() => setActiveTab('simple')} color="orange" desc="現場での迅速な判定、目標設定に。" />
+                                    </div>
+                                    <div className="mt-8 pt-6 border-t border-slate-800 flex justify-between items-center">
+                                        <div>
+                                            <p className="text-blue-400 text-[10px] font-bold uppercase">目標タンパク量</p>
+                                            <p className="text-2xl font-black">{results.protein}<span className="text-xs text-slate-500 ml-1">g/day</span></p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-slate-500 text-[10px] font-bold">設定係数</p>
+                                            <p className="text-sm font-bold text-slate-300">{proteinFactor} g/kg</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
+                                    <h3 className="text-sm font-bold flex items-center gap-2 text-slate-700 border-b border-slate-100 pb-2">
+                                        <Icon name="mouse-pointer-2" className="w-4 h-4 text-indigo-500" />
+                                        算出方法の選択の助け
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] leading-relaxed">
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <p className="font-bold text-indigo-700 mb-1">HBE vs NIHN</p>
+                                            日本人高齢者ではHBEは過大評価になりやすいため、NIHNから開始し状況を見ることが多いです。
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <p className="font-bold text-emerald-700 mb-1">AF/IFの判断</p>
+                                            リハ負荷や炎症(CRP)に応じて調整します。異化抑制には適切なIF設定が重要です。
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <footer className="text-center py-4 text-[10px] text-slate-400">
+                            ※本ツールは計算補助用です。最終的な決定は臨床状況を鑑みて行ってください。
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+        const ResultCard = ({ title, val, active, onClick, color, desc }) => {
+            const colorClass = color === 'indigo' ? 'border-indigo-500 bg-indigo-500/10' : color === 'emerald' ? 'border-emerald-500 bg-emerald-500/10' : 'border-orange-500 bg-orange-500/10';
+            const textClass = color === 'indigo' ? 'text-indigo-400' : color === 'emerald' ? 'text-emerald-400' : 'text-orange-400';
+            
+            return (
+                <div className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${active ? colorClass : 'border-slate-800 hover:border-slate-700'}`} onClick={onClick}>
+                    <div className="flex justify-between items-start mb-1">
+                        <span className={`text-[10px] font-black uppercase tracking-tighter ${textClass}`}>{title}</span>
+                        {active && <Icon name="check" className={`w-4 h-4 ${textClass}`} />}
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black">{val}</span>
+                        <span className="text-slate-400 text-sm font-bold">kcal/day</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 italic">{desc}</p>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
